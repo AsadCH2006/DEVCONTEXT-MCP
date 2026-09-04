@@ -2,12 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install uv for fast, reliable package management
 RUN pip install --no-cache-dir uv
 
-COPY pyproject.toml .
-COPY src/ src/
-COPY README.md .
+# Copy repository files
+COPY . /app
 
-RUN uv pip install --system .
+# Sync project dependencies
+RUN uv sync --frozen || uv sync
 
-ENTRYPOINT ["smartvault-mcp"]
+# Set explicit entrypoint for stdio transport
+ENTRYPOINT ["uv", "run", "devcontext-mcp"]

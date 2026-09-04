@@ -1,66 +1,61 @@
-import json
-import os
-import uuid
-from pathlib import Path
-from mcp.server.fastmcp import FastMCP
+import sys
+import logging
+from fastmcp import FastMCP
 
-# Initialize the MCP Server
-mcp = FastMCP("SmartVault MCP")
+# Route all logging exclusively to stderr so stdout remains clean for JSON-RPC
+logging.basicConfig(
+    stream=sys.stderr,
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-DATA_FILE = Path.home() / ".smartvault" / "notes.json"
+# Initialize FastMCP server
+mcp = FastMCP("DevContext")
 
-def load_notes():
-    if not DATA_FILE.exists():
-        return []
-    with open(DATA_FILE, "r") as f:
-        return json.load(f)
-
-def save_notes(notes):
-    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(DATA_FILE, "w") as f:
-        json.dump(notes, f, indent=2)
-
-# --- TOOLS (Actions the AI can perform) ---
+# Example internal storage for notes/context
+context_store = {}
 
 @mcp.tool()
-def add_note(title: str, content: str, category: str = "general") -> str:
-    """Save a new note to the vault."""
-    notes = load_notes()
-    note_id = str(uuid.uuid4())[:8]
-    notes.append({"id": note_id, "title": title, "content": content, "category": category})
-    save_notes(notes)
-    return f"Saved note '{title}' with ID [{note_id}]."
+def save_context(key: str, value: str) -> str:
+    """Save a context note or key-value pair."""
+    context_store[key] = value
+    logging.info(f"Saved context key: {key}")
+    return f"Context key '{key}' saved successfully."
 
 @mcp.tool()
-def list_notes() -> str:
-    """List all saved notes."""
-    notes = load_notes()
-    if not notes:
-        return "No notes found in SmartVault."
-    return "\n".join([f"- [{n['id']}] {n['title']} ({n['category']})" for n in notes])
+def get_context(key: str) -> str:
+    """Retrieve a stored context note by key."""
+    if key not in context_store:
+        return f"Key '{key}' not found."
+    return context_store[key]
 
 @mcp.tool()
-def delete_note(note_id: str) -> str:
-    """Delete a note by its ID."""
-    notes = load_notes()
-    filtered = [n for n in notes if n["id"] != note_id]
-    if len(filtered) == len(notes):
-        return f"Note [{note_id}] not found."
-    save_notes(filtered)
-    return f"Deleted note [{note_id}]."
+def list_context() -> list:
+    """List all stored context keys."""
+    return list(context_store.keys())
 
-# --- RESOURCE (Data stream the AI can read) ---
+@mcp.tool()
+def delete_context(key: str) -> str:
+    """Delete a context entry by key."""
+    if key in context_store:
+        del context_store[key]
+        return f"Key '{key}' deleted successfully."
+    return f"Key '{key}' not found."
 
-@mcp.resource("vault://all")
-def get_vault() -> str:
-    """View all notes formatted in Markdown."""
-    notes = load_notes()
-    if not notes:
-        return "# SmartVault\nNo notes stored."
-    return "\n".join([f"## {n['title']}\n{n['content']}\n" for n in notes])
+@mcp.tool()
+def clear_context() -> str:
+    """Clear all stored context entries."""
+    context_store.clear()
+    return "All context entries cleared."
+
+@mcp.resource("context://summary")
+def get_summary() -> str:
+    """Read summary resource of current dev context."""
+    total_keys = len(context_store)
+    return f"DevContext summary: {total_keys} items currently stored."
 
 def main():
-    mcp.run()
+    mcp.run(transport="stdio")
 
 if __name__ == "__main__":
     main()

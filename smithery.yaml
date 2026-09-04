@@ -1,7 +1,5 @@
 startCommand:
   type: stdio
   config:
-    command: uv
-    args:
-      - run
-      - smartvault-mcp
+    command: "uv"
+    args: ["run", "devcontext-mcp"]
